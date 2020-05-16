@@ -1,0 +1,977 @@
+---
+title: "ccbr1044_singleCell"
+author: "Da Yin"
+date: "5/2/2020"
+output: html_document
+---
+
+Single cell RNA-seq data analysis
+=======================
+
+An analysis of four samples of Small Cell Lung Cancer (SCLC) from patient autopsy.
+
+
+Project Objectives:
+-----------
+
+- assaying patient samples from both primary tumor and distal metastasis after rapid autopsy collection of samples;
+- assess the heterogeneity of NAPY sub-classification (sub-classification system in SCLC);
+- analyze Intratumoral Heterogeneity of SCLC subgroups; 
+- analyze potential groups of interest (groups that have changed based on therapy; 
+- analyze general state of immune infiltrate in patient samples
+
+Methods and Samples
+-----------
+
+- Collecting samples from patients after Rapid Autopsy, with dissociation and capture as soon as physically possible after patients pass – 4 samples currently sequenced, more coming. 
+- 9 reference cell lines spread across the 4 NAPY subgroups of SCLC.
+- using single cell sequencing of known lines as "reference points" for patient samples already collected, and patient samples collected moving forward.
+- NAPY subgroups refer to dominance of the transcription factors Neurod1, ASCL1, Pou2F3 and YAP1 – all cell lines captured, not sequenced yet
+
+
+Analysis main steps:
+-----------
+
+1. pre-processing (performed on Biowulf HPC)
+
+- Filtering out cells based on mean absolute deviation (MAD) of nCount, nFeature, pct.mitochondria: above 3
+- Dimension reduction (PCA, URD), 
+- Clustering (Smart Local Moving) with resolution 0.2-1.2, 
+- Doublet removal(doubletFinder_v3)
+- cell identity annotation with "monaco_main","BP_encode_main","Novershtern_main","HPCA_main", "dice_main", "HumanLung.P3" (singleR)
+- Integrate batches (four samples)
+
+
+2. Assessing cluster separation and batch-correction
+-----------
+
+- The four samples (merged/integrated object) were clustered with resolution 0.4,0.6,0.8,1,1.2. Silhouette plot was used to assess the cluster seperation. The silhouette width for each cell indicates  difference between distances across all clusters, as well as the average distance to cells in the same cluster. Cells with large positive silhouette widths are closer to other cells in the same cluster than to cells in different clusters. Resolution of 0.6 has the highest average silhouette width, thus was choosen for the subsequent analysis
+
+- Well mixture of small anchor populations (e.g cluster4, connective tissues) in the pre-batch corrected tSNE plot indicates good integration. In addition, seperation of "SCAF1355_6", "SCAF1357_6PDC" samples from the other two samples (SCAF1356_16 and SCAF1358_16PDC) is also expected since they are metastatic tumor cells taken from lymph node and liver respectively. Taken together, the subsequent analysis is carried out using 0.6 resolution and merged object (without batch-correction).
+
+
+3. Assessing cell identity annotation
+-----------
+
+- cell identity was annotated with "monaco_main","BP_encode_main","Novershtern_main","HPCA_main", "dice_main" (singleR). However none of these databases were specific enough for the SCLC. Therefore human lung cell atlas was downloaded from Chan-Zuckerberg Biohub and used to annotate the cell types in the in the datasets. Human lung cell atlas includes fresh blood and lung tissue obtained across the major tissue compartments. It has ~30,000 cells, including all the classical lung cell types (41 of 45, 91%), from the most abundant cell types (e.g. capillary endothelial cells, ~23% of lung cells) down to exceedingly rare ones, with estimated abundances as low as 0.01% (e.g., neuroendocrine cells, ionocytes). SCLC cells have a high mitotic index, display neuroendocrine markers and are believed to derive from NECs or neuroendocrine progenitors (NEPs) in the lung. Achaete-scute homolog 1 (ASCL1) is a neuroendocrine transcription factor. THe majority of the cells (tumor cells) are annotated as neuroendocrine cells, witch makes sense. 
+
+
+4. Clustering
+-----------
+
+- Cluster1,2,3,5,6,7 are mostly neuroendocrine cells which has high level of ASCL1 expression indicating these six clusters are SCLC. 
+- Cluster4 are mostly connective tissue cells including fibroblasts and vascular smooth muscle. 
+- Cluster8-12 are mostly immune cells. Cluster8 has mostly T cell, Cluster9 dendritic cells, Cluster10 basophil, Cluster11 B cell, Cluster12 T cell. 
+- In cluster8-12, there are some cells expressing ASCL1, indicating mixture of small number of SCLC cells in these clusters
+- In cluster11, and cluster 12 the number of cells is very low, <50 cells
+- transformed RNA expression data for each cluster/sample/met was exported and also plotted on heatmap to show unsupervised cluster/sameple clustering
+
+
+5. Assessing ASCL1 expression across groups, samples and clusters
+-----------
+
+- "SCAF1355_6" and "SCAF1357_6PDC" were grouped as met1(lymph node metastasis) while the other two samples were grouped as met2(liver metastasis).
+- DE analysis was carried out between ASCL1 high and ASCL1 low groups. These are met2(ASCL1 high)-met1(ASCL1 low), cluster6(ASCL1 high)-cluster3(ASCL1 low), and 
+cluster1(ASCL1 high)-cluster7(ASCL1 low). Over-representation analysis was performed on the DEGs of these ASCL1 high - ASCL1 low contrasts, suing GO BP, KEGG and Reactome gene sets. 
+
+
+6. GSVA analysis
+-----------
+
+Gene Set Variation Analysis (GSVA) estimates variation of pathway activity over a sample population in an unsupervised manner. Here I have used the ssGSEA method from GSVA to calculate enrichment of these following gene sets for each cluster. 
+
+- H: hallmark gene sets
+- C2 CP : Canonical pathways (these gene sets are canonical representations of a biological process compiled by domain experts)
+- C5 BP: GO gene sets (Gene sets derived from the GO Biological Process Ontology)
+- C6: oncogenic signatures (Gene sets that represent signatures of cellular pathways which are often dis-regulated in cancer)
+- C7: immunologic signatures (Gene sets that represent cell states and perturbations within the immune system)
+
+
+
+Folder structure
+-----------
+
+```
+ccbr1044_singleCell
+├── rawData                  # merged seurat object 
+│                            #  
+├── analysis                 # analysis folder that contains script and results
+│   ├── processedData        # 
+|       ├── compositions     # breakdown of cell numbers based on cell identity/clusters/samples/condion etc.
+|       ├── expression       # expression level of genes based on cell identity/clusters/samples/condion etc.
+|       ├── geneSets         # gene sets downloaded from Molecular Signatures Database (MSigDB), for GSVA and ORA analysis
+│   ├── results              # 
+|       ├── UMAPs            # umap of all cells based on cell identity/clusters/samples etc.
+|       ├── DEG              # differential expression analysis and volcano plots showing hightly differentially expressed genes
+|       ├── GSVA             # overlay of GSVA enrichemnt, with cell compositions by sample, with ASCL1 expression level
+|       ├── ORA              # over-representation of pathways in the differentially expressed genes between contrasts
+|       ├── silhouettePlot   # silhouette plot was used to assess the cluster seperation based on resolution. 0.6 has the highest average width
+│   ├── *.Rmd                # R scripts 
+│   ├── *.html               # Rmarkdown html knit file (run Rmd to get html)
+├── reports                  # Pdfs and ppts slides for presentation.
+├── ref                      # methods and references
+├── readme.md                # analysis summary                       
+└── ...
+```
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(Seurat)
+library(ggplot2)
+library(farver)
+library(cowplot)
+library(BiocGenerics)
+library(S4Vectors)
+library(MAST)
+library(dplyr)
+library(tidyverse)
+library(ggrepel)
+library(pheatmap)
+library(clusterProfiler)
+library(org.Mm.eg.db)
+library(org.Hs.eg.db)
+library(stringr)
+library(filesstrings)
+library(png)
+library(clusterProfiler.dplyr)
+library(DT)
+library(forcats)
+library(readr)
+library(data.table)
+library(RColorBrewer)
+library(ComplexHeatmap)
+library(circlize)
+library(monocle)
+library(cluster)
+library(ggmin)
+library (Seurat)
+library(SingleR)
+library(SingleCellExperiment)
+library(scater)
+library(monocle)
+library(AUCell)
+library(GSEABase)
+library(singscore)
+library(garnett)
+library(GSVA)
+library(here)
+library(URD)
+library(ReactomePA)
+library(here)
+theme_set(theme_classic())
+```
+
+
+### load seurat objects, so is the merged one, so2 is the batch-corrected one. Change cluster names.
+```{r}
+so = readRDS("processedData/ccbr1044_so.rds")
+sclcReshape = readRDS("~/Desktop/active_projects/seuratObject/ccbr1044/sclcReshape.rds")
+immunReshape = readRDS("~/Desktop/active_projects/seuratObject/ccbr1044/immunReshape.rds")
+
+setwd("~/Desktop/active_projects/ccbr1044_singleCell/analysis/")
+
+#chnage seurat cluster naming
+so@meta.data$new_clusters = ifelse(so@meta.data$SCT_snn_res.0.6==0,1,
+                                         ifelse(so@meta.data$SCT_snn_res.0.6==1,2,
+                                         ifelse(so@meta.data$SCT_snn_res.0.6==2,3,
+                                         ifelse(so@meta.data$SCT_snn_res.0.6==3,4,
+                                         ifelse(so@meta.data$SCT_snn_res.0.6==4,6,
+                                         ifelse(so@meta.data$SCT_snn_res.0.6==5,5,
+                                         ifelse(so@meta.data$SCT_snn_res.0.6==6,7,
+                                         ifelse(so@meta.data$SCT_snn_res.0.6==7,8,
+                                         ifelse(so@meta.data$SCT_snn_res.0.6==8,9,
+                                         ifelse(so@meta.data$SCT_snn_res.0.6==9,10,
+                                         ifelse(so@meta.data$SCT_snn_res.0.6==10,11,12)))))))))))
+
+so@meta.data$met = ifelse(so@meta.data$Sample%in%c("SCAF1355_6", "SCAF1357_6PDC"), "met1", "met2")
+
+so@meta.data$met %>% table()
+so@meta.data$new_clusters = so@meta.data$new_clusters %>% as.factor()
+
+```
+
+# compositional table
+```{r}
+df = as.data.frame(table(so$new_clusters, so$Sample))
+colnames(df)[1] = "cluster"
+colnames(df)[2] = "Sample"
+df_wide = spread(df, Sample, Freq)
+rownames(df_wide) = df_wide$cluster
+write.csv(df_wide, "cellCluster_by_sample.csv", row.names = F, quote = F)
+
+df = as.data.frame(table(so$HumanLung.P3, so$Sample))
+colnames(df)[1] = "identity"
+colnames(df)[2] = "Sample"
+df_wide = spread(df, Sample, Freq)
+rownames(df_wide) = df_wide$cluster
+write.csv(df_wide, "cellIdentity_by_sample.csv", row.names = F, quote = F)
+
+df = as.data.frame(table(so$HumanLung.P3, so$new_clusters))
+colnames(df)[1] = "identity"
+colnames(df)[2] = "cluster"
+df_wide = spread(df, cluster, Freq)
+rownames(df_wide) = df_wide$cluster
+write.csv(df_wide, "cellIdentity_by_cluster.csv", row.names = F, quote = F)
+```
+
+### The four samples were clustered with resolution 0.4,0.6,0.8,1,1.2. Silhouette plot was used to assess the cluster seperation. The silhouette width for each cell indicates  difference between distances across all clusters, as well as the average distance to cells in the same cluster. Cells with large positive silhouette widths are closer to other cells in the same cluster than to cells in different clusters. 
+```{r}
+runRes = c(0.4,0.6,0.8,1,1.2)
+
+for ( res in runRes){
+  coord = Embeddings(so2, reduction = "pca")[,1:15]
+  Idents(so2) = so2@meta.data[[paste0('SCT_snn_res.', res)]]
+  clusters = Idents(so2)
+  d = dist(coord, method = "euclidean")
+  sil = silhouette(as.numeric(clusters), dist = d)
+  pdf(paste0("SilhouettePlot_res", res,".pdf"), height = 16, width = 13)
+  plot(sil, col=as.factor(clusters[order(clusters, decreasing = F)]), main = paste("Silhouette plot of Seurat clustering - resolution ", res))+ 
+  abline(v=mean(sil[,3]), col="red4", lty=4)
+  dev.off()
+  dp = DimPlot(so2, reduction = "umap", label=T,  repel = T, group.by = paste0('SCT_snn_res.', res), pt.size = 0.1) + labs(title = paste0('resolution ', res))
+  pdf(paste0("DimPlot_res", res,".pdf"))
+  print(dp)
+  dev.off()
+}
+```
+
+###  Assessing cell identity annotation 
+```{r}
+load("~/Desktop/active_projects/seuratObject/droplet_normal_lung_blood_seurat_ntiss10x.P3.anno.20191002.RC4.Robj", verbose = T)
+ntiss10x.P3.anno = UpdateSeuratObject(ntiss10x.P3.anno)
+ntiss10x.P3.anno@meta.data$free_annotation %>% table()
+
+DimPlot(ntiss10x.P3.anno, reduction = "tsne")
+FeaturePlot(ntiss10x.P3.anno, features = "ASCL1") # AFP is marker for hepatocyte
+
+ntiss10x.P3.anno@meta.data$free_annotation %>% table() %>% sum()
+ntiss10x.P3.anno = UpdateSeuratObject(ntiss10x.P3.anno)
+sce = as.SingleCellExperiment(so)
+sce_tm3 = as.SingleCellExperiment(ntiss10x.P3.anno)
+sce_tm3 = logNormCounts(sce_tm3)
+so@misc$SingleR$HumanLungCellAtlas.P3 = SingleR(test=sce, ref=sce_tm3,labels=sce_tm3$free_annotation, de.method="wilcox")
+#so$HumanLung = so@misc$SingleR$HumanLungCellAtlas.P1$labels
+so$HumanLung.P3 = so@misc$SingleR$HumanLungCellAtlas.P3$labels
+
+saveRDS(so, file = "processedData/ccbr1044_so.rds")
+
+```
+
+#### number of SCLC cells in each cluster/sample
+```{r}
+
+lst_sample_sclc = list()
+lst_type_scle = list()
+lst_immun = list()
+for (i in c(1,2,3,4,5,6,7)){
+  # sample 
+  c = so@meta.data[which(so@meta.data$new_clusters==i),]
+  c_sample = c$Sample%>% table() %>%data.frame()
+  colnames(c_sample)[1]= "Sample"
+  c_sample$new_clusters = as.factor(i)
+  lst_sample_sclc[[i]]= c_sample
+  
+  # cell identity 
+  c_type_scle = c$HumanLung.P3%>% table() %>%data.frame()
+  colnames(c_type_scle)[1]= "HumanLung"
+  c_type_scle$new_clusters = as.factor(i)
+  lst_type_scle[[i]]= c_type_scle
+
+}
+
+my_data_sclc = do.call(dplyr::bind_rows, lst_sample_sclc)
+#my_data$new_clusters = as.integer(my_data$new_clusters)
+ggplot(my_data_sclc, aes(x = new_clusters, y = Freq, fill=Sample)) + geom_bar(stat = "identity")+ coord_flip()
+
+my_data_type_sclc = do.call(dplyr::bind_rows, lst_type_scle)
+#my_data$new_clusters = as.integer(my_data$new_clusters)
+ggplot(my_data_type_sclc, aes(x = new_clusters, y = Freq, fill=HumanLung)) + geom_bar(stat = "identity")+ coord_flip()
+```
+
+#### number of immune cells in each cluster/sample
+```{r}
+lst_sample_immun = list()
+lst_type_immun = list()
+
+for (i in c(8,9,10,11,12)){
+  c = so@meta.data[which(so@meta.data$new_clusters==i),]
+  c_sample = c$Sample%>% table() %>%data.frame()
+  colnames(c_sample)[1]= "Sample"
+  c_sample$new_clusters = as.factor(i)
+  lst_sample_immun[[i]]= c_sample
+  
+  c = immunReshape@meta.data[which(immunReshape@meta.data$new_clusters==i),]
+  c_type = c$HumanLung.P3%>% table() %>%data.frame()
+  colnames(c_type)[1]= "HumanLung"
+  c_type$new_clusters = as.factor(i)
+  lst_type_immun[[i]]= c_type
+}
+
+
+my_data = do.call(dplyr::bind_rows, lst_sample_immun)
+my_data$new_clusters = as.integer(my_data$new_clusters)
+ggplot(my_data, aes(x = new_clusters, y = Freq, fill=Sample)) + geom_bar(stat = "identity")+ coord_flip()
+
+my_data_type = do.call(dplyr::bind_rows, lst_type_immun)
+my_data_type$new_clusters = as.integer(my_data_type$new_clusters)
+ggplot(my_data_type, aes(x = new_clusters, y = Freq, fill=HumanLung)) + geom_bar(stat = "identity")+ coord_flip()
+```
+
+#### create umaps for merged object based on annotation, sample, cell cycle, cluster
+```{r}
+annotations = c("monaco_main","BP_encode_main","Novershtern_main","HPCA_main", "dice_main", "HumanLung.P3", "Sample", "new_clusters", "met","Phase")
+
+for (i in annotations){
+  dp =
+  DimPlot(so, reduction = "umap", group.by = i, pt.size = 0.1) + labs(title = i) 
+  pdf(paste0("DimPlot_", i,".pdf"), width = 15)
+  print(dp)
+  dev.off()
+}
+```
+
+#### find all markers for each cluster based on 0.6 resolution
+```{r}
+for (i in colnames(so@meta.data)){
+  if (substr(i, 1, 7)== "SCT_snn"){
+    so@meta.data[[i]] = as.numeric(so@meta.data[[i]])
+  }
+}
+
+Idents(so2) = "SCT_snn_res.0.6"
+#DimPlot(so2)
+all.markers <- FindAllMarkers(so, only.pos = F, min.pct = 0.25, logfc.threshold = 0.25)
+top10 <- all.markers %>% group_by(cluster) %>% top_n(n = 20, wt = avg_logFC)
+all_marker_top10 = DoHeatmap(so2, features = top10$gene) 
+
+```
+
+#### subset SCLC and immune cells based on cluster number
+```{r}
+sclcSubset = subset(so, cells=which(so$new_clusters%in%c(1,2,3,5,6,7)))
+immunSubset = subset(so, cells=which(so$new_clusters%in%c(8,9,10,11,12)))
+```
+#### resacle the subgroups
+```{r}
+
+DefaultAssay(sclcSubset) = "RNA"
+sclcReshape = SCTransform(sclcSubset) %>% RunPCA() 
+ElbowPlot(sclcReshape)
+npcs = 15
+sclcReshape= RunUMAP(sclcReshape, dims = 1:npcs)  %>% FindNeighbors() %>% FindClusters(algorithm=3,resolution=0.6)
+
+DefaultAssay(immunSubset) = "RNA"
+immunReshape = SCTransform(immunSubset) %>% RunPCA() 
+ElbowPlot(immunReshape)
+npcs = 15
+immunReshape= RunUMAP(immunReshape, dims = 1:npcs)  %>% FindNeighbors() %>% FindClusters(algorithm=3,resolution=0.6)
+
+saveRDS(object = sclcReshape,file = "processedData/sclcReshape_5.15.2020.rds")
+saveRDS(object = immunReshape,file = "processedData/immunReshape_5.15.2020.rds")
+
+```
+
+#### create umaps for SCLC based on annotation, sample, cell cycle, cluster
+```{r}
+annotations = c("HumanLung.P3", "Sample", "new_clusters", "met","Phase")
+
+for (i in annotations){
+  dp =
+  DimPlot(sclcReshape, reduction = "umap", group.by = i, pt.size = 0.1) + labs(title = i) 
+  pdf(paste0("DimPlot_sclcReshape_", i,".pdf"), width = 15)
+  print(dp)
+  dev.off()
+}
+```
+
+#### expression of ASCL1 genes across clusters 
+```{r}
+Idents(so) = "new_clusters"
+VlnPlot(so,features = "ASCL1")+theme(legend.position = "top")
+FeaturePlot(so,features = "ASCL1", split.by = "Sample")
+RidgePlot(so,features = "ASCL1")
+
+```
+
+#### DE between ASCL1 high and ASCL1 low groups
+```{r}
+# performing differential expression on the RNA assay, after normalization
+DefaultAssay(sclcReshape) = "SCT"
+
+#DE across sample groups
+Idents(sclcReshape) = "met"
+markers.sclc_met2.met1 = 
+FindMarkers(sclcReshape, ident.1="met2", ident.2="met1",test.use="MAST", logfc.threshold = 0.25, min.pct = 0.25)
+
+write.csv(markers.sclc_met2.met1, "markers.sclc_met2.met1.csv", quote = F)
+
+markers.sclc_met2.met1[order(markers.sclc_met2.met1$p_val_adj, decreasing = F),]
+markers.sclc_met2.met1[1:100,]
+top_n(markers.sclc_met2.met1, 100, -p_val_adj)
+
+#DE within sample, across clusters with high and low ASCL1 expression
+Idents(sclcReshape) = "new_clusters"
+# within met2, cluster1 has higher ASCL1 expression than cluster7
+markers.sclc_cluster1.cluster7 = 
+FindMarkers(sclcReshape, ident.1=1, ident.2=7,test.use="MAST", logfc.threshold = 0.25, min.pct = 0.25)
+write.csv(markers.sclc_cluster1.cluster7, "markers.sclc_cluster1.cluster7.csv", quote = F)
+
+
+# within met1, cluster6 has higher ASCL1 expression than cluster3
+markers.sclc_cluster6.cluster3 = 
+FindMarkers(sclcReshape, ident.1=6, ident.2=3,test.use="MAST", logfc.threshold = 0.25, min.pct = 0.25)
+write.csv(markers.sclc_cluster6.cluster3, "markers.sclc_cluster6.cluster3.csv", quote = F)
+
+library(DT)
+DT::datatable(markers.sclc_cluster1.cluster7)
+```
+
+#### function to take in a deg table and create a volcano at sample level and also perform ORA
+```{r}
+#' function to take in a deg table and create a volcano at sample level
+#'  
+#' @param obj a seurat object
+#' @param group sample/cluster/condition
+#' @param name1/name2 cluster1/cluster2 or sample1/sample2 or condition1/condition2
+#' @param logFC.cutoff log fold change cut-off to be used for creating volcano plots and differential coloration
+#'
+#' @return volcano plots showing significant DEs in red
+#'
+myVolcano = function(obj, group, name1, name2, logFC.cutoff){
+  Idents(obj) = group
+  deg = FindMarkers(obj, ident.1=name1, ident.2=name2,test.use="MAST", logfc.threshold = 0.25, min.pct = 0.25)
+  write.csv(deg, paste0("deg_", group, "_", name1, "-", name2,".csv"), quote = F)
+  deg$p_val_adj = ifelse(deg$p_val_adj==0, 5e-324, deg$p_val_adj)
+  deg.sig = deg[which(deg$p_val_adj<0.05&abs(deg$avg_logFC)>logFC.cutoff),]
+  deg$significance = ifelse(deg$p_val_adj<0.05&abs(deg$avg_logFC)>logFC.cutoff, "sig", "ns")
+  deg$gene = rownames(deg)
+  volcanoPlot =
+    ggplot(deg, aes(x=avg_logFC, y=-log(p_val_adj, 10))) +
+    geom_point(colour = ifelse(deg$significance=="sig", "red", "black"), size = 0.8, alpha=0.5) +
+    ggtitle(paste0("deg_", group, "_", name1, "-", name2)) +
+    xlab("log2 FC") +
+    ylab("-log10 adjusted p-value") +
+    geom_text_repel(size = 3,aes(label= ifelse(deg$significance=="sig",gene,""),
+                                 colour = "red",fontface="bold"))+
+    theme_classic() +
+    theme(legend.position = "none")+ xlim(-1,1) + ylim(0,350)
+    pdf(paste0("deg_", group, "_", name1, "-", name2, "_volcano",".pdf"))
+    print(volcanoPlot)
+    dev.off()
+    
+    my_entrez = AnnotationDbi::select(hs, keys = rownames(deg),columns = c("ENTREZID", "SYMBOL"), keytype = "SYMBOL")
+    allGenes_entrez = AnnotationDbi::select(hs, keys = rownames(obj),columns = c("ENTREZID", "SYMBOL"),
+       keytype = "SYMBOL")
+    
+    myKEGG_ORA =enrichKEGG(gene = as.character(my_entrez$ENTREZID), universe = as.character(allGenes_entrez$ENTREZID), organism = 'hsa',
+    pvalueCutoff = 0.01, pAdjustMethod = "BH", qvalueCutoff = 0.05,minGSSize = 10, maxGSSize = 500)
+    myKEGG_ORA = setReadable(myKEGG_ORA, 'org.Hs.eg.db', 'ENTREZID')
+    write.csv(myKEGG_ORA@result, paste0("ORA_myKEGG_", group, "_", name1, "-", name2,".csv"), quote = F)
+
+    myBP_ORA = enrichGO(gene = rownames(deg),universe = rownames(obj),
+         OrgDb = org.Hs.eg.db,keyType='SYMBOL', ont = "BP",pAdjustMethod = "BH", pvalueCutoff = 0.01, qvalueCutoff = 0.05)
+    #myBP_ORA = setReadable(myBP_ORA, 'org.Hs.eg.db', 'ENTREZID')
+    write.csv(myBP_ORA@result, paste0("ORA_myBP_", group, "_", name1, "-", name2,".csv"), quote = F)
+
+    myReactome_ORA = enrichPathway(gene = my_entrez$ENTREZID, universe = allGenes_entrez$ENTREZID, organism = 'human', pvalueCutoff = 0.01, 
+                                   pAdjustMethod = "BH", qvalueCutoff = 0.05, minGSSize = 10, maxGSSize = 500)
+    myReactome_ORA = setReadable(myReactome_ORA, 'org.Hs.eg.db', 'ENTREZID')
+    write.csv(myReactome_ORA@result, paste0("ORA_myReactome_", group, "_", name1, "-", name2,".csv"), quote = F)
+}
+
+myVolcano(obj = sclcReshape, group = "new_clusters", name1 = 1, name2 = 7, logFC.cutoff = 0.5)
+myVolcano(obj = sclcReshape, group = "new_clusters", name1 = 6, name2 = 3, logFC.cutoff = 0.5)
+myVolcano(obj = sclcReshape, group = "met", name1 = "met2", name2 = "met1", logFC.cutoff = 0.5)
+myVolcano(obj = sclcReshape, group = "Sample", name1 = "SCAF1358_16PDC", name2 = "SCAF1357_6PDC", logFC.cutoff = 0.5)
+myVolcano(obj = sclcReshape, group = "Sample", name1 = "SCAF1356_16", name2 = "SCAF1355_6", logFC.cutoff = 0.5)
+
+```
+
+#### export expression of genes and create heatmaps of most variable genes
+```{r}
+Idents(sclcReshape) = "met"
+sclcReshape_met_avergeExp = AverageExpression(sclcReshape ,assays = "SCT")
+Idents(sclcReshape) = "Sample"
+sclcReshape_sample_avergeExp = AverageExpression(sclcReshape ,assays = "SCT")
+Idents(sclcReshape) = "new_clusters"
+sclcReshape_clusters_avergeExp = AverageExpression(sclcReshape ,assays = "SCT")
+
+write.csv(sclcReshape_met_avergeExp$SCT, "sclcReshape_met_avergeExp.csv", quote = F)
+write.csv(sclcReshape_sample_avergeExp$SCT, "sclcReshape_sample_avergeExp.csv", quote = F)
+write.csv(sclcReshape_clusters_avergeExp$SCT, "sclcReshape_clusters_avergeExp.csv", quote = F)
+
+Idents(immunReshape) = "met"
+immunReshape_met_avergeExp = AverageExpression(immunReshape ,assays = "SCT")
+Idents(immunReshape) = "Sample"
+immunReshape_sample_avergeExp = AverageExpression(immunReshape ,assays = "SCT")
+Idents(immunReshape) = "new_clusters"
+immunReshape_clusters_avergeExp = AverageExpression(immunReshape ,assays = "SCT")
+
+write.csv(immunReshape_met_avergeExp$SCT, "immunReshape_met_avergeExp.csv", quote = F)
+write.csv(immunReshape_sample_avergeExp$SCT, "immunReshape_sample_avergeExp.csv", quote = F)
+write.csv(immunReshape_clusters_avergeExp$SCT, "immunReshape_clusters_avergeExp.csv", quote = F)
+
+immunReshape@meta.data$new_clusters %>% class()
+so@meta.data$new_clusters = as.factor(so@meta.data$new_clusters)
+
+Idents(so) = "met"
+so_met_avergeExp = AverageExpression(so ,assays = "SCT")
+Idents(so) = "Sample"
+so_sample_avergeExp = AverageExpression(so ,assays = "SCT")
+Idents(so) = "new_clusters"
+so_clusters_avergeExp = AverageExpression(so ,assays = "SCT")
+
+write.csv(so_met_avergeExp$SCT, "so_met_avergeExp.csv", quote = F)
+write.csv(so_sample_avergeExp$SCT, "so_sample_avergeExp.csv", quote = F)
+write.csv(so_clusters_avergeExp$SCT, "so_clusters_avergeExp.csv", quote = F)
+
+
+var_genes  = apply(sclcReshape_sample_avergeExp$SCT, 1, var)
+select_var <- names(sort(var_genes, decreasing=TRUE))[1:300]
+sclcReshape_sample_avergeExp_select = sclcReshape_sample_avergeExp$SCT[select_var,]
+
+mat = sclcReshape_sample_avergeExp_select
+
+p = 
+ComplexHeatmap::Heatmap(matrix = t(scale(t(data.matrix(mat)))), name="Z-score", km=1, 
+                        col=colorRampPalette(c("darkblue","grey","darkred"))(256), 
+                        row_names_gp = gpar(fontsize = ifelse(nrow(mat) <= 30, 10, 
+                                                       ifelse(30<nrow(mat)&nrow(mat) <= 45, 7,
+                                                       ifelse(45<nrow(mat)&nrow(mat) <= 60, 5, 4))), 
+                                            fontface = "bold"),
+                        column_names_gp = gpar(fontsize = 10, fontface = "bold"),
+                        cluster_columns = T ,column_title_gp = gpar(fontsize = 10, fontface = "bold"), 
+                        column_names_rot = 65, width = unit(5, "cm"),
+                        column_title = "", column_title_side = "top")
+
+
+```
+
+#### perform ORA seperately
+```{r}
+hs <- org.Hs.eg.db
+
+allGenes_entrez = AnnotationDbi::select(hs, keys = rownames(sclcReshape),
+            columns = c("ENTREZID", "SYMBOL"),
+       keytype = "SYMBOL")
+
+suppressMessages(library(ReactomePA))
+
+#DE across sample groups
+Idents(sclcReshape) = "met"
+markers.sclc_met2.met1 = 
+FindMarkers(sclcReshape, ident.1="met2", ident.2="met1",test.use="MAST", logfc.threshold = 0.25, min.pct = 0.25)
+
+getMyORA = function(DEG, db){
+   my_entrez = AnnotationDbi::select(hs, keys = rownames(DEG),columns = c("ENTREZID", "SYMBOL"), keytype = "SYMBOL")
+   allGenes_entrez = AnnotationDbi::select(hs, keys = rownames(sclcReshape),columns = c("ENTREZID", "SYMBOL"),
+       keytype = "SYMBOL")
+   
+   if (db == "KEGG"){
+    myKEGG_ORA =enrichKEGG(gene = as.character(my_entrez$ENTREZID), universe = as.character(allGenes_entrez$ENTREZID), organism = 'hsa',
+    pvalueCutoff = 0.01, pAdjustMethod = "BH", qvalueCutoff = 0.05,minGSSize = 10, maxGSSize = 500)
+    myKEGG_ORA = setReadable(myKEGG_ORA, 'org.Hs.eg.db', 'ENTREZID')
+    return(myKEGG_ORA)
+  }
+  if (db =="BP"){
+    myBP_ORA = enrichGO(gene = rownames(DEG),universe = rownames(sclcReshape),
+         OrgDb = org.Hs.eg.db,keyType='SYMBOL', ont = "BP",pAdjustMethod = "BH", pvalueCutoff = 0.01, qvalueCutoff = 0.05)
+    #myBP_ORA = setReadable(myBP_ORA, 'org.Hs.eg.db', 'ENTREZID')
+    return(myBP_ORA)
+  }
+  if (db == "Reactome"){
+    myReactome_ORA = enrichPathway(gene = my_entrez$ENTREZID, universe = allGenes_entrez$ENTREZID, organism = 'human', pvalueCutoff = 0.01, 
+                                   pAdjustMethod = "BH", qvalueCutoff = 0.05, minGSSize = 10, maxGSSize = 500)
+    myReactome_ORA = setReadable(myReactome_ORA, 'org.Hs.eg.db', 'ENTREZID')
+    return(myReactome_ORA)
+  }
+}
+
+
+
+c5 = read.gmt("~/Desktop/active_projects/ccbr1044_singleCell/analysis/processedData/c5.bp.v7.1.symbols.gmt")
+c6 <- read.gmt("~/Desktop/active_projects/ccbr1044_singleCell/analysis/processedData/c6.all.v7.1.symbols.gmt")
+
+myC5_ORA = enricher(gene = rownames(markers.sclc_met2.met1),universe = rownames(sclcReshape),pAdjustMethod = "BH", pvalueCutoff = 0.01, qvalueCutoff = 0.05, TERM2GENE=c5)
+myC6_ORA = enricher(gene = rownames(markers.sclc_met2.met1),universe = rownames(sclcReshape),pAdjustMethod = "BH", pvalueCutoff = 0.01, qvalueCutoff = 0.05, TERM2GENE=c6)
+ORA1_KEGG = getMyORA(markers.sclc_met2.met1)
+ORA1_BP = getMyORA(DEG = markers.sclc_met2.met1, db = "BP")
+ORA1_Reactome = getMyORA(DEG = markers.sclc_met2.met1, db = "Reactome")
+ORA2 = getMyORA(markers.sclc_cluster1.cluster7)
+dotplot(ORA1_BP)
+```
+
+
+#### use scatter plot to visulize expression for any gene
+```{r}
+# extract cell name and their new_clusters metadata
+sclcReshape@meta.data$cell = rownames(sclcReshape@meta.data)
+df_cell2cluster = sclcReshape@meta.data[,c("cell","new_clusters")]
+# extract the normalized counts for sclc cells. Note: data is normalized value, counts is raw value.
+df_normalizedCounts = as.data.frame(as.matrix(sclcReshape@assays$SCT@data))
+
+# function to take in a gene, and generate expression scatter plots for all clusters.
+myVlnPlot = function(gene){
+  new_df_gene = df_normalizedCounts[which(rownames(df_normalizedCounts)==gene),]
+  new_df_gene_long = reshape2::melt(new_df_gene)
+  colnames(new_df_gene_long) = c("cell", "normalized_counts")
+  new_df_gene_long = merge(new_df_gene_long, df_cell2cluster, by="cell")
+
+  ggplot(new_df_gene_long, aes(x = new_clusters, y = normalized_counts, color=new_clusters)) + 
+    geom_point(stat = "identity",  size = 0.5, alpha = 0.3,
+             position=position_jitter(width=0.5, height=1)) + 
+    theme(legend.position='none') + 
+    stat_summary(fun.y = mean, fun.ymin = mean, fun.ymax = mean,
+                 geom = "crossbar", width = 1) + xlab("cluster")+
+    ylab("normalized counts") + ggtitle(gene)
+}
+```
+
+#### calculate Aucell
+```{r}
+runAucell = function(obj,geneSets){
+  set.seed(42)
+  expr = FetchData(obj,vars=rownames(obj@assays$RNA@data) ,slot="data")
+  exprMatrix <- t(expr)
+  ExprMatrix <- exprMatrix
+  geneSets <- subsetGeneSets(geneSets, rownames(exprMatrix))
+  geneSets <- setGeneSetNames(geneSets, newNames=paste(names(geneSets), " (", nGenes(geneSets) ,"g)", sep=""))
+  countsPerGene <- apply(exprMatrix, 1, function(x) sum(x>0))
+  cells_rankings <- AUCell_buildRankings(exprMatrix, nCores=4, plotStats=TRUE)
+  cells_AUC <- AUCell_calcAUC(geneSets, cells_rankings)
+  cells_assignment <- AUCell_exploreThresholds(cells_AUC, plotHist=F, assign=TRUE)
+  selectedThresholds <- getThresholdSelected(cells_assignment)
+  AUCell_plotTSNE(tSNE=obj@reductions$umap@cell.embeddings[,1:2],
+    exprMat=exprMatrix,plots = c("AUC","binaryAUC"),#, "binaryAUC", "AUC","expression"),
+    cellsAUC=cells_AUC[1:4,])
+  return(cells_AUC)
+
+}
+
+hallmark = GSEABase::getGmt("/data/CCBR_Pipeliner/db/PipeDB/MSigDB/h.all.v6.0.symbols_mouse.gmt")
+c2cp_mouse = GSEABase::getGmt("/data/CCBR_Pipeliner/db/PipeDB/MSigDB/c2.cp.v6.0.symbols_mouse.gmt")
+aucell.pDC = runAucell(lymphNodes.merge.DC.pDC,hallmark)
+```
+
+
+# composition of all clusters
+```{r}
+df = as.data.frame(table(so$new_clusters, so$Sample))
+colnames(df)[1] = "cluster"
+colnames(df)[2] = "Sample"
+
+
+df_wide = spread(df, Sample, Freq)
+#df_wide$total = rowSums(df_wide[,2:5])
+rownames(df_wide) = df_wide$cluster
+
+# normalize cluster cell numbers by total cell numbers by each sample
+df_wide$SCAF1355_6=round(df_wide$SCAF1355_6*10000/sum(df_wide$SCAF1355_6))
+df_wide$SCAF1356_16=round(df_wide$SCAF1356_16*10000/sum(df_wide$SCAF1356_16))
+df_wide$SCAF1357_6PDC=round(df_wide$SCAF1357_6PDC*10000/sum(df_wide$SCAF1357_6PDC))
+df_wide$SCAF1358_16PDC=round(df_wide$SCAF1358_16PDC*10000/sum(df_wide$SCAF1358_16PDC))
+
+df_wide = df_wide[which(df_wide$cluster%in%c(1,2,3,4,5,6,7,8,9,10,11,12)),]
+
+df_wide = data.matrix(df_wide[,2:5])
+swept = sweep(df_wide,1,rowSums(df_wide),`/`)
+
+swept_long = melt(swept, id.vars=c("cluster"))
+colnames(swept_long) = c("cluster","Sample","ratio")
+
+p1 = 
+ggplot(swept_long, aes(x = as.factor(cluster), y = ratio, fill=Sample)) + geom_bar(position = "stack", stat = "identity", width = 0.5) + theme(legend.position="top") + xlab("cluster") + theme(axis.text.x = element_text(face="bold")) + ylab("fraction") + coord_flip()
+```
+
+
+
+# composition of sclc clusters
+```{r}
+df = as.data.frame(table(sclcReshape$new_clusters, sclcReshape$Sample))
+colnames(df)[1] = "cluster"
+colnames(df)[2] = "Sample"
+
+
+df_wide = spread(df, Sample, Freq)
+#df_wide$total = rowSums(df_wide[,2:5])
+rownames(df_wide) = df_wide$cluster
+
+# normalize cluster cell numbers by total cell numbers by each sample
+df_wide$SCAF1355_6=round(df_wide$SCAF1355_6*10000/sum(df_wide$SCAF1355_6))
+df_wide$SCAF1356_16=round(df_wide$SCAF1356_16*10000/sum(df_wide$SCAF1356_16))
+df_wide$SCAF1357_6PDC=round(df_wide$SCAF1357_6PDC*10000/sum(df_wide$SCAF1357_6PDC))
+df_wide$SCAF1358_16PDC=round(df_wide$SCAF1358_16PDC*10000/sum(df_wide$SCAF1358_16PDC))
+
+df_wide = df_wide[which(df_wide$cluster%in%c(1,2,3,5,6,7)),]
+
+df_wide = data.matrix(df_wide[,2:5])
+swept = sweep(df_wide,1,rowSums(df_wide),`/`)
+
+swept_long = melt(swept, id.vars=c("cluster"))
+colnames(swept_long) = c("cluster","Sample","ratio")
+
+p1 = 
+ggplot(swept_long, aes(x = as.factor(cluster), y = ratio, fill=Sample)) + geom_bar(position = "stack", stat = "identity", width = 0.5) + theme(legend.position="top") + xlab("cluster") + theme(axis.text.x = element_text(face="bold")) + ylab("fraction") + coord_flip()
+```
+
+
+# composition of immun clusters
+```{r}
+
+df = as.data.frame(table(immunReshape$new_clusters, immunReshape$Sample))
+colnames(df)[1] = "cluster"
+colnames(df)[2] = "Sample"
+
+
+df_wide = spread(df, Sample, Freq)
+#df_wide$total = rowSums(df_wide[,2:5])
+rownames(df_wide) = df_wide$cluster
+
+# normalize cluster cell numbers by total cell numbers by each sample
+df_wide$SCAF1355_6=round(df_wide$SCAF1355_6*10000/sum(df_wide$SCAF1355_6))
+df_wide$SCAF1356_16=round(df_wide$SCAF1356_16*10000/sum(df_wide$SCAF1356_16))
+df_wide$SCAF1357_6PDC=round(df_wide$SCAF1357_6PDC*10000/sum(df_wide$SCAF1357_6PDC))
+df_wide$SCAF1358_16PDC=round(df_wide$SCAF1358_16PDC*10000/sum(df_wide$SCAF1358_16PDC))
+
+df_wide = df_wide[which(df_wide$cluster%in%c(8,9,10,11,12)),]
+
+df_wide = data.matrix(df_wide[,2:5])
+immun_swept = sweep(df_wide,1,rowSums(df_wide),`/`)
+
+immun_swept_long = melt(immun_swept, id.vars=c("cluster"))
+colnames(immun_swept_long) = c("cluster","Sample","ratio")
+
+p2 = 
+ggplot(immun_swept_long, aes(x = as.factor(cluster), y = ratio, fill=Sample)) + geom_bar(position = "stack", stat = "identity", width = 0.5) + theme(legend.position="top") + xlab("cluster") + theme(axis.text.x = element_text(face="bold")) + ylab("fraction") + coord_flip()
+
+```
+
+# composition of immun clusters by identity
+```{r}
+
+df = as.data.frame(table(immunReshape$new_clusters, immunReshape$HumanLung.P3))
+colnames(df)[1] = "cluster"
+colnames(df)[2] = "identity"
+
+
+df_wide = spread(df, identity, Freq)
+#df_wide$total = rowSums(df_wide[,2:5])
+rownames(df_wide) = df_wide$cluster
+
+# normalize cluster cell numbers by total cell numbers by each sample
+df_wide$SCAF1355_6=round(df_wide$SCAF1355_6*10000/sum(df_wide$SCAF1355_6))
+df_wide$SCAF1356_16=round(df_wide$SCAF1356_16*10000/sum(df_wide$SCAF1356_16))
+df_wide$SCAF1357_6PDC=round(df_wide$SCAF1357_6PDC*10000/sum(df_wide$SCAF1357_6PDC))
+df_wide$SCAF1358_16PDC=round(df_wide$SCAF1358_16PDC*10000/sum(df_wide$SCAF1358_16PDC))
+
+df_wide = df_wide[which(df_wide$cluster%in%c(8,9,10,11,12)),]
+
+df_wide = data.matrix(df_wide[,2:5])
+immun_swept = sweep(df_wide,1,rowSums(df_wide),`/`)
+
+immun_swept_long = melt(immun_swept, id.vars=c("cluster"))
+colnames(immun_swept_long) = c("cluster","Sample","ratio")
+
+p2 = 
+ggplot(immun_swept_long, aes(x = as.factor(cluster), y = ratio, fill=Sample)) + geom_bar(position = "stack", stat = "identity", width = 0.5) + theme(legend.position="top") + xlab("cluster") + theme(axis.text.x = element_text(face="bold")) + ylab("fraction") + coord_flip()
+
+```
+
+
+```{r}
+
+swept = data.frame(swept)
+swept$cluster = as.numeric(rownames(swept))
+write.table(swept, "results/umaps/Number_of_sclc_in_each_cluster_by_sample.fraction.txt", quote = F, sep = "\t", row.names = F, )
+
+swept_long = melt(swept, id.vars=c("cluster"))
+colnames(swept_long) = c("cluster","Sample","ratio")
+
+p1 = 
+ggplot(swept_long, aes(x = as.factor(cluster), y = ratio, fill=Sample)) + geom_bar(position = "dodge", stat = "identity", width = 0.5) + theme(legend.position="top") + xlab("cluster") + theme(axis.text.x = element_text(face="bold")) + ylab("fraction")
+
+ggsave(filename = "results/umaps/Number_of_sclc_in_each_cluster_by_sample.fraction.pdf", plot = p1)
+```
+
+#### this function creates a complext heatmap that shows most variable enriched pathways across all clusters and its correlation with expression of a particular gene
+```{r}
+myGSVA = function(obj, geneset, group){
+  gs = GSEABase::getGmt(paste0("~/Desktop/active_projects/ccbr1044_singleCell/analysis/processedData/", geneset))
+  
+  Idents(obj) = group
+  aveExp = AverageExpression(obj)
+
+  obj_ssGSEA_gs=gsva(expr = as.matrix(as.data.frame(aveExp$RNA)),gset.idx.list=gs,method='ssgsea',ssgsea.norm=F)
+
+  var_genes  = apply(obj_ssGSEA_gs, 1, var)
+  select_var <- names(sort(var_genes, decreasing=TRUE))[1:30]
+  obj_ssGSEA_gs_select = obj_ssGSEA_gs[select_var,]
+  
+  rownames(obj_ssGSEA_gs_select) = gsub("_", " ", rownames(obj_ssGSEA_gs_select))
+  
+  mat = obj_ssGSEA_gs_select
+
+  ASCL1.aveExpr = aveExp$SCT[which(rownames(aveExp$SCT)=="ASCL1"),] 
+
+  vec = as.numeric(ASCL1.aveExpr[1,])
+  vec2 = rowMeans(mat)
+
+  column_ha = HeatmapAnnotation(ASCL1 = anno_barplot(vec), sample = anno_barplot(swept, gp = gpar(fill = c(2,3,5,6)), bar_width = 1, height = unit(1, "cm")))
+  #ha = HeatmapAnnotation(sample = anno_barplot(swept, gp = gpar(fill = c(5,6,2,3)), bar_width = 1, height = unit(1, "cm")))
+  
+  row_ha = rowAnnotation(enrichment= anno_barplot(vec2))
+  
+  lgd = Legend(labels = colnames(swept), title = "sample",
+    legend_gp = gpar(fill = c(2,3,5,6)))
+  
+  p = 
+  ComplexHeatmap::Heatmap(matrix = t(scale(t(data.matrix(mat)))), name="Z-score", km=1, 
+                        col=colorRampPalette(c("darkblue","grey","darkred"))(256), 
+                        row_names_gp = gpar(fontsize = ifelse(nrow(mat) <= 30, 10, 
+                                                       ifelse(30<nrow(mat)&nrow(mat) <= 45, 7,
+                                                       ifelse(45<nrow(mat)&nrow(mat) <= 60, 5, 4))), 
+                                            fontface = "bold"),
+                        column_names_gp = gpar(fontsize = 10, fontface = "bold"),
+                        cluster_columns = T ,column_title_gp = gpar(fontsize = 10, fontface = "bold"), 
+                        column_names_rot = 65, width = unit(5, "cm"),
+                        column_title = geneset, column_title_side = "top",top_annotation = column_ha,right_annotation = row_ha)
+  
+
+    
+
+  plot.heat = draw(p, heatmap_legend_side = "left", annotation_legend_side = "left",heatmap_legend_list = list(lgd))
+  
+  pdf(paste0(geneset, ".pdf"), width = 11)
+  print(plot.heat)
+  dev.off()
+
+}
+
+myGSVA(obj = sclcReshape, geneset = "hallmark.v7.1.symbols.gmt", group = "new_clusters")
+myGSVA(obj = sclcReshape, geneset = "c6.oncogenic_signatures.v7.1.symbols.gmt", group = "new_clusters")
+myGSVA(obj = sclcReshape, geneset = "c2.Canonical_pathways.v7.1.symbols.gmt", group = "new_clusters")
+myGSVA(obj = sclcReshape, geneset = "c5.biological_process.v7.1.symbols.gmt", group = "new_clusters")
+myGSVA(obj = sclcReshape, geneset = "c7.immunological_signatures.v7.1.symbols.gmt", group = "new_clusters")
+
+
+```
+
+
+```{r}
+
+
+
+myGSVA = function(obj, geneset, group){
+  gs = GSEABase::getGmt(paste0("~/Desktop/active_projects/ccbr1044_singleCell/analysis/processedData/", geneset))
+  
+  Idents(obj) = group
+  aveExp = AverageExpression(obj)
+
+  obj_ssGSEA_gs=gsva(expr = as.matrix(as.data.frame(aveExp$RNA)),gset.idx.list=gs,method='ssgsea',ssgsea.norm=F)
+
+  var_genes  = apply(obj_ssGSEA_gs, 1, var)
+  select_var <- names(sort(var_genes, decreasing=TRUE))[1:30]
+  obj_ssGSEA_gs_select = obj_ssGSEA_gs[select_var,]
+  
+  rownames(obj_ssGSEA_gs_select) = gsub("_", " ", rownames(obj_ssGSEA_gs_select))
+  
+  mat = obj_ssGSEA_gs_select
+
+  ASCL1.aveExpr = aveExp$SCT[which(rownames(aveExp$SCT)=="ASCL1"),] 
+
+  vec = as.numeric(ASCL1.aveExpr[1,])
+  vec2 = rowMeans(mat)
+
+  column_ha = HeatmapAnnotation(ASCL1 = anno_barplot(vec), sample = anno_barplot(immun_swept, gp = gpar(fill = c(2,3,5,6)), bar_width = 1, height = unit(1, "cm")))
+  #ha = HeatmapAnnotation(sample = anno_barplot(swept, gp = gpar(fill = c(5,6,2,3)), bar_width = 1, height = unit(1, "cm")))
+  
+  row_ha = rowAnnotation(enrichment= anno_barplot(vec2))
+  
+  lgd = Legend(labels = colnames(swept), title = "sample",
+    legend_gp = gpar(fill = c(2,3,5,6)))
+  
+  p = 
+  ComplexHeatmap::Heatmap(matrix = t(scale(t(data.matrix(mat)))), name="Z-score", km=1, 
+                        col=colorRampPalette(c("darkblue","grey","darkred"))(256), 
+                        row_names_gp = gpar(fontsize = ifelse(nrow(mat) <= 30, 10, 
+                                                       ifelse(30<nrow(mat)&nrow(mat) <= 45, 7,
+                                                       ifelse(45<nrow(mat)&nrow(mat) <= 60, 5, 4))), 
+                                            fontface = "bold"),
+                        column_names_gp = gpar(fontsize = 10, fontface = "bold"),
+                        cluster_columns = T ,column_title_gp = gpar(fontsize = 10, fontface = "bold"), 
+                        column_names_rot = 65, width = unit(5, "cm"),
+                        column_title = geneset, column_title_side = "top",top_annotation = column_ha,right_annotation = row_ha)#bottom_annotation = ha
+  
+
+    
+
+  plot.heat = draw(p, heatmap_legend_side = "left", annotation_legend_side = "left",heatmap_legend_list = list(lgd))
+  
+  pdf(paste0(geneset, ".pdf"), width = 11)
+  print(plot.heat)
+  dev.off()
+
+}
+
+myGSVA(obj = immunReshape, geneset = "hallmark.v7.1.symbols.gmt", group = "new_clusters")
+myGSVA(obj = immunReshape, geneset = "c6.oncogenic_signatures.v7.1.symbols.gmt", group = "new_clusters")
+myGSVA(obj = immunReshape, geneset = "c2.Canonical_pathways.v7.1.symbols.gmt", group = "new_clusters")
+myGSVA(obj = immunReshape, geneset = "c5.biological_process.v7.1.symbols.gmt", group = "new_clusters")
+myGSVA(obj = immunReshape, geneset = "c7.immunological_signatures.v7.1.symbols.gmt", group = "new_clusters")
+```
+
+#### create signature scores for a list of genes
+```{r}
+Idents(sclcReshape) = "Sample"
+gene_set1 = c("FAM87B", "LINC00115", "FAM41C")
+sclcReshape = AddModuleScore(object = sclcReshape, 
+                                  features = gene_set1,
+                                  name = "gene_set1_Score")
+
+sclcReshape@meta.data
+m = paste0("gene_set1_Score","1")
+
+clusid = sclcReshape@meta.data[[m]]
+clusid = scales::rescale(sclcReshape@meta.data[[m]], to=c(0,1))
+    
+clus.quant=quantile(clusid[clusid>0],probs=c(.1,.5,.9))
+midpt = clus.quant[2]
+midpt2 = clus.quant[1]
+midpt3 = clus.quant[3]
+
+clusid.df <- data.frame(id=sclcReshape@meta.data$Sample,score=sclcReshape@meta.data[[m]])
+clusid.df_SCAF1356_16_SCAF1355_6 = clusid.df[which(clusid.df$id%in%c("SCAF1356_16","SCAF1355_6")),]
+
+ggplot(clusid.df_SCAF1356_16_SCAF1355_6,aes(x=score,fill=id)) +
+geom_density(alpha = 0.4)+ geom_histogram(position="dodge",bins=300)
+
+
+get_signatureScore = function(obj, genes, group, name1, name2){
+  Idents(obj) = group
+  obj = AddModuleScore(object = obj, features = genes, name = deparse(substitute(genes)))
+  m = paste0(deparse(substitute(genes)),"1")
+  clusid = obj@meta.data[[m]]
+  clusid = scales::rescale(obj@meta.data[[m]], to=c(0,1))
+  clus.quant=quantile(clusid[clusid>0],probs=c(.1,.5,.9))
+  midpt = clus.quant[2]
+  midpt2 = clus.quant[1]
+  midpt3 = clus.quant[3]
+  
+  clusid.df = data.frame(id=obj@meta.data[[group]],score=obj@meta.data[[m]])
+  clusid.df_WT_Arf1 = clusid.df[which(clusid.df$id%in%c(name1,name2)),]
+  
+  ggplot(clusid.df_WT_Arf1,aes(x=score,fill=id)) +
+  geom_density(alpha = 0.4)+ geom_histogram(position="dodge",bins=300)
+        
+}
+
+gene_set1 = c("FAM87B", "LINC00115", "FAM41C")
+
+get_signatureScore(obj = sclcReshape, genes = gene_set1, group = "Sample", name1 = "SCAF1356_16", name2 = "SCAF1355_6")
+
+```
+
