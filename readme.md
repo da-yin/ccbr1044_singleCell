@@ -3,7 +3,6 @@ Single cell RNA-seq data analysis
 
 An analysis of four samples of Small Cell Lung Cancer (SCLC) from patient autopsy.
 
-
 Project Objectives:
 -----------
 
@@ -28,6 +27,10 @@ Analysis main steps:
 1. pre-processing (performed on Biowulf HPC)
 
 - Filtering out cells based on mean absolute deviation (MAD) of nCount, nFeature, pct.mitochondria: above 3
+- Normalization and transformation: Seurat3 SCTransform
+- scRNA QC, annotation: https://github.com/CCBR/Pipeliner/blob/master/Results-template/Scripts/scrnaQC.R
+- integrate batches: https://github.com/CCBR/Pipeliner/blob/master/Results-template/Scripts/integrateBatches.R
+- ref: https://satijalab.org/seurat/v3.0/integration.html
 - Dimension reduction (PCA, URD), 
 - Clustering (Smart Local Moving) with resolution 0.2-1.2, 
 - Doublet removal(doubletFinder_v3)

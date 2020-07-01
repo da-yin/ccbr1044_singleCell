@@ -192,6 +192,11 @@ so@meta.data$met = ifelse(so@meta.data$Sample%in%c("SCAF1355_6", "SCAF1357_6PDC"
 so@meta.data$met %>% table()
 so@meta.data$new_clusters = so@meta.data$new_clusters %>% as.factor()
 
+resolutions = c("SCT_snn_res.0.4","SCT_snn_res.0.6","SCT_snn_res.0.8","SCT_snn_res.1","SCT_snn_res.1.2")
+for ( i in resolutions){
+  so@meta.data[[i]] = as.integer(so@meta.data[[i]])
+}
+
 ```
 
 # compositional table
